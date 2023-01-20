@@ -1,0 +1,122 @@
+slect *
+FROM HumanResources.EmployeePayHistory
+
+SELECT *
+FROM HumanResources.Department
+
+SELECT *
+FROM HumanResources.Employee
+
+SELECT *
+FROM HumanResources.EmployeeDepartmentHistory
+
+SELECT x.*
+INTO EmpDet
+FROM (
+	SELECT eph.BusinessEntityID
+		,p.FirstName Name
+		,d.Name AS Dept
+		,eph.Rate
+	FROM HumanResources.EmployeePayHistory eph
+	JOIN Person.Person p ON eph.BusinessEntityID = p.BusinessEntityID
+	JOIN HumanResources.EmployeeDepartmentHistory edh ON p.BusinessEntityID = edh.BusinessEntityID
+	JOIN HumanResources.Department d ON edh.DepartmentID = d.DepartmentID
+	WHERE edh.ModifiedDate NOT IN (
+			SELECT DISTINCT ModifiedDate
+			FROM HumanResources.EmployeePayHistory eph
+			)
+	) x;
+
+SELECT *
+FROM EmpDet;
+
+SELECT ed.*
+	,max(ed.rate) OVER (PARTITION BY ed.dept) AS max_rate
+FROM EmpDet ed;
+
+---row number,rank,dense rank,lead and lag
+--ROW_NUMBER
+--To implement the row num (order by is must)
+SELECT ed.*
+	,ROW_NUMBER() OVER (
+		PARTITION BY dept ORDER BY BusinessEntityID
+		) AS Row_num
+FROM EmpDet ED;
+
+--to take top two employees
+SELECT z.*
+FROM (
+	SELECT ed.*
+		,ROW_NUMBER() OVER (
+			PARTITION BY dept ORDER BY BusinessEntityID
+			) AS Row_num
+	FROM EmpDet ED
+	) z
+WHERE z.Row_num < 3;
+
+--RANK
+--to fetch the rank by rate
+SELECT ed.*
+	,rank() OVER (
+		PARTITION BY ed.dept ORDER BY ed.Rate DESC
+		) AS rank
+FROM EmpDet ed;
+
+--to fetch the no 1 rank by rate from each dept
+SELECT z.*
+FROM (
+	SELECT ed.*
+		,rank() OVER (
+			PARTITION BY ed.dept ORDER BY ed.Rate DESC
+			) AS rank
+	FROM EmpDet ed
+	) z
+WHERE z.rank = 1;
+
+--DENSE_RANK
+SELECT ed.*
+	,rank() OVER (
+		PARTITION BY ed.dept ORDER BY ed.Rate DESC
+		) AS rank
+	,dense_rank() OVER (
+		PARTITION BY ed.dept ORDER BY ed.Rate DESC
+		) AS d_rank
+FROM EmpDet ed;
+
+--LAG()
+--to compare with the previous record
+SELECT ed.*
+	,lag(Rate, 1, 0) OVER (
+		PARTITION BY dept ORDER BY BusinessEntityID
+		) AS p_emp_rate
+FROM EmpDet ed;
+
+SELECT ed.*
+	,lag(Rate) OVER (
+		PARTITION BY dept ORDER BY BusinessEntityID
+		) AS p_emp_rate
+	,CASE 
+		WHEN ed.Rate > lag(Rate) OVER (
+				PARTITION BY dept ORDER BY BusinessEntityID
+				)
+			THEN 'Higher than Previous Emp'
+		WHEN ed.Rate < lag(Rate) OVER (
+				PARTITION BY dept ORDER BY BusinessEntityID
+				)
+			THEN 'Lower than Previous Emp'
+		WHEN ed.Rate = lag(Rate) OVER (
+				PARTITION BY dept ORDER BY BusinessEntityID
+				)
+			THEN 'Equal to the Previous Emp'
+		END Comparission
+FROM EmpDet ed;
+
+--LEAD
+--to compare with the nxt record
+SELECT ed.*
+	,lead(Rate) OVER (
+		PARTITION BY dept ORDER BY BusinessEntityID
+		) AS nx_emp_rate
+FROM EmpDet ed;
+
+e
